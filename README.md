@@ -66,3 +66,23 @@ MinorProject/
 │   └── login.html
 │
 └── enron_spam_data.csv
+
+## ⚙️ Installation
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/Ashx2241/AI-Based-Smart-Email-Priority-and-Notification-System.git
+2. Open the project folder
+cd AI-Based-Smart-Email-Priority-and-Notification-System
+3. Create a virtual environment
+python -m venv .venv
+4. Activate the virtual environment
+
+Windows:
+
+.venv\Scripts\activate
+5. Install the required dependencies
+pip install -r requirements.txt
+6. Run the application
+python app.py
