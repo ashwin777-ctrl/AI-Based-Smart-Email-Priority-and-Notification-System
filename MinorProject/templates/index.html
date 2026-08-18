@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Email Notification Optimizer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand-block">
+                <div class="brand-mark">A</div>
+                <div>
+                    <p class="eyebrow">Smart inbox orchestration</p>
+                    <h1>Email Notification Optimizer</h1>
+                </div>
+            </div>
+            <div class="topbar-actions">
+                <div class="source-toggle">
+                    <form method="post" action="{{ url_for('set_source') }}">
+                        <input type="hidden" name="source" value="dataset">
+                        <button
+                            class="toggle-btn {% if source_mode == 'dataset' %}active{% endif %}"
+                            type="submit"
+                        >
+                            Dataset
+                        </button>
+                    </form>
+                    <form method="post" action="{{ url_for('set_source') }}">
+                        <input type="hidden" name="source" value="mailbox">
+                        <button
+                            class="toggle-btn {% if source_mode == 'mailbox' %}active{% endif %}"
+                            type="submit"
+                            {% if not mailbox_connected %}disabled{% endif %}
+                        >
+                            Inbox
+                        </button>
+                    </form>
+                </div>
+                <label class="search-wrap">
+                    <span class="search-icon">Q</span>
+                    <input id="searchInput" type="search" placeholder="Search mail">
+                </label>
+                <button id="retrainBtn" class="primary-btn">Retrain Model</button>
+                {% if mailbox_connected %}
+                <form method="post" action="{{ url_for('logout') }}">
+                    <button class="secondary-btn logout-btn" type="submit" aria-label="Logout mailbox">
+                        Logout
+                    </button>
+                </form>
+                {% else %}
+                <a class="secondary-btn" href="{{ url_for('login') }}">Login</a>
+                {% endif %}
+            </div>
+        </header>
+
+        <main class="workspace">
+            <aside class="sidebar">
+                <button class="nav-item active" data-filter="all">
+                    <span class="nav-icon">@</span>
+                    <span>Inbox</span>
+                    <strong id="inboxCount">0</strong>
+                </button>
+                <button class="nav-item" data-filter="high">
+                    <span class="nav-icon">!</span>
+                    <span>Important</span>
+                    <strong id="importantCount">0</strong>
+                </button>
+                <button class="nav-item" data-filter="spam">
+                    <span class="nav-icon">X</span>
+                    <span>Spam</span>
+                    <strong id="spamCount">0</strong>
+                </button>
+
+                <section class="stats-panel">
+                    <h2>Overview</h2>
+                    <div class="mini-stat">
+                        <span>Dataset</span>
+                        <strong id="datasetSize">0</strong>
+                    </div>
+                    <div class="mini-stat">
+                        <span>Accuracy</span>
+                        <strong id="modelAccuracy">0%</strong>
+                    </div>
+                    <div class="mini-stat">
+                        <span>Immediate</span>
+                        <strong id="immediateCount">0</strong>
+                    </div>
+                </section>
+            </aside>
+
+            <section class="mail-panel">
+                <div class="panel-head">
+                    <div>
+                        <h2>Inbox</h2>
+                        <p id="inboxModeText">
+                            {% if mailbox_connected %}
+                            Live mailbox mode: recent inbox emails are classified as they arrive.
+                            {% else %}
+                            Dataset mode: connect your mailbox to classify new incoming emails.
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                <div class="mail-toolbar">
+                    <span id="sourcePill" class="toolbar-pill">
+                        {% if mailbox_connected %}Source: mailbox{% else %}Source: dataset{% endif %}
+                    </span>
+                </div>
+                <div id="feedbackMessage" class="feedback-banner" hidden></div>
+                <div id="emailList" class="email-list"></div>
+                <section class="charts-panel">
+                    <div class="charts-head">
+                        <h3>Model Graphs</h3>
+                        <p>Live training visuals for accuracy metrics and the confusion matrix.</p>
+                    </div>
+                    <div class="charts-grid">
+                        <figure class="chart-card">
+                            <figcaption>Accuracy and metrics</figcaption>
+                            <img id="metricsChart" alt="Accuracy and model metrics graph" hidden>
+                        </figure>
+                        <figure class="chart-card">
+                            <figcaption>Confusion matrix</figcaption>
+                            <img id="confusionMatrixChart" alt="Confusion matrix graph" hidden>
+                        </figure>
+                    </div>
+                </section>
+            </section>
+        </main>
+    </div>
+
+    <template id="emailRowTemplate">
+        <article class="email-row">
+            <div class="email-priority">
+                <span class="priority-icon"></span>
+            </div>
+            <div class="email-main">
+                <div class="email-headline">
+                    <div>
+                        <p class="email-sender"></p>
+                        <h3 class="email-subject"></h3>
+                    </div>
+                    <span class="decision-badge"></span>
+                </div>
+                <p class="email-message"></p>
+                <div class="email-meta">
+                    <span class="email-date"></span>
+                    <span class="meta-dot">|</span>
+                    <span class="email-priority-text"></span>
+                    <span class="meta-dot">|</span>
+                    <span class="email-confidence"></span>
+                </div>
+                <div class="reason-tags"></div>
+            </div>
+            <div class="email-actions">
+                <button class="action-btn mark-btn" data-action="opened">Mark Important</button>
+                <button class="action-btn ignore-btn" data-action="ignored">Ignore</button>
+            </div>
+        </article>
+    </template>
+
+    <div id="mailDetailModal" class="mail-detail-modal" hidden>
+        <div id="mailDetailBackdrop" class="mail-detail-backdrop"></div>
+        <section class="mail-detail-card" role="dialog" aria-modal="true" aria-labelledby="mailDetailSubject">
+            <div class="mail-detail-top">
+                <div>
+                    <p id="mailDetailSender" class="mail-detail-sender"></p>
+                    <h3 id="mailDetailSubject" class="mail-detail-subject"></h3>
+                </div>
+                <button id="closeMailDetail" class="close-detail-btn" type="button" aria-label="Close email">
+                    Close
+                </button>
+            </div>
+            <div class="mail-detail-meta">
+                <span id="mailDetailDate"></span>
+                <span>|</span>
+                <span id="mailDetailPriority"></span>
+                <span>|</span>
+                <span id="mailDetailDecision"></span>
+            </div>
+            <div id="mailDetailReasonTags" class="reason-tags detail-reason-tags"></div>
+            <div class="rule-actions">
+                <button id="whitelistSenderBtn" class="action-btn mark-btn" type="button">Always Prioritize Sender</button>
+                <button id="blacklistSenderBtn" class="action-btn ignore-btn" type="button">Suppress Sender</button>
+                <button id="whitelistDomainBtn" class="action-btn mark-btn" type="button">Always Prioritize Domain</button>
+                <button id="blacklistDomainBtn" class="action-btn ignore-btn" type="button">Suppress Domain</button>
+            </div>
+            <article id="mailDetailBody" class="mail-detail-body"></article>
+        </section>
+    </div>
+
+    <script src="{{ url_for('static', filename='app_ui.js') }}"></script>
+</body>
+</html>

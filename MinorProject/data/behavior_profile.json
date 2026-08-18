@@ -1,0 +1,20 @@
+{
+  "sender_scores": {
+    "no-reply@accounts.google.com": 6,
+    "messages-noreply@linkedin.com": 2,
+    "no-reply@account.canva.com": 2,
+    "no-reply@razorpay.com": 2,
+    "contact.us@idp.com": 2
+  },
+  "reviewed_emails": {
+    "1": true,
+    "2708": true,
+    "2702": true
+  },
+  "whitelisted_senders": {},
+  "blacklisted_senders": {},
+  "whitelisted_domains": {},
+  "blacklisted_domains": {},
+  "opened_emails": 7,
+  "ignored_emails": 0
+}

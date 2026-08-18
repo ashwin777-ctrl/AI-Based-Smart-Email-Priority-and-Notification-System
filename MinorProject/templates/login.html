@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mailbox Login | AI Email Notification Optimizer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="auth-body">
+    <main class="auth-shell">
+        <section class="auth-card">
+            <div class="auth-brand">
+                <div class="brand-mark">A</div>
+                <div>
+                    <p class="eyebrow">Smart inbox orchestration</p>
+                    <h1>Connect your mailbox</h1>
+                </div>
+            </div>
+
+            <p class="auth-copy">
+                Sign in with your mailbox credentials to classify fresh emails from your inbox.
+                For Gmail or Outlook, use an app password if regular login is blocked.
+            </p>
+
+            {% if error %}
+            <div class="feedback-banner auth-error">{{ error }}</div>
+            {% endif %}
+
+            {% if mailbox_connected %}
+            <div class="feedback-banner auth-success">
+                Connected as {{ mailbox_email }}. You can go back to the inbox or connect a different account.
+            </div>
+            {% endif %}
+
+            <form class="auth-form" method="post" action="{{ url_for('login') }}">
+                <label class="field-group">
+                    <span>Email address</span>
+                    <input type="email" name="email" placeholder="you@example.com" required>
+                </label>
+
+                <label class="field-group">
+                    <span>Password or app password</span>
+                    <input type="password" name="password" placeholder="Enter your mailbox password" required>
+                </label>
+
+                <label class="field-group">
+                    <span>IMAP host</span>
+                    <input type="text" name="imap_host" placeholder="Optional for Gmail, Outlook, Yahoo, and iCloud">
+                </label>
+
+                <div class="auth-actions">
+                    <button type="submit" class="primary-btn">Connect Mailbox</button>
+                    <a class="secondary-link" href="{{ url_for('index') }}">Open inbox</a>
+                </div>
+            </form>
+        </section>
+    </main>
+</body>
+</html>

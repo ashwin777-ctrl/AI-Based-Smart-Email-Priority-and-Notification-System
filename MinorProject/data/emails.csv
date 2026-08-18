@@ -1,0 +1,13 @@
+Subject,Message,Spam/Ham,Date
+Quarterly revenue meeting,Please review the financial slides before tomorrow morning's executive meeting,Ham,2026-04-01
+Security alert: unusual login,We detected a suspicious login attempt and need your confirmation ASAP,Ham,2026-04-02
+Weekend fashion sale,Enjoy 50 percent off on our latest collection this weekend only,Spam,2026-04-03
+Client payment reminder,Invoice payment is due today for the enterprise renewal contract,Ham,2026-04-04
+Daily productivity digest,Your personalized work tips and article roundup are ready,Spam,2026-04-05
+Project deadline update,The release deadline has moved up and the team should align today,Ham,2026-04-06
+Community newsletter,Check out the latest stories from creators you follow,Spam,2026-04-07
+Manager feedback request,Please share your sprint notes before the leadership review,Ham,2026-04-08
+Promo offer for subscribers,Unlock a discount on premium content with this limited offer,Spam,2026-04-09
+Production incident follow-up,Customer impact was reported overnight and we need a root cause summary,Ham,2026-04-10
+Team lunch invitation,Join us for a casual team lunch next Friday,Ham,2026-04-11
+Social media digest,See what people said about your latest post,Spam,2026-04-12
