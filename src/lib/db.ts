@@ -1,22 +1,28 @@
-import { neon, neonConfig } from '@neondatabase/serverless';
-import { BehaviorRule, Email, ModelMetrics, UserSettings } from '@/types';
-import { INITIAL_EMAILS, INITIAL_METRICS } from './storage';
+import { neon } from '@neondatabase/serverless';
+import { getMongoDb, isMongoDbConfigured } from './mongodb';
+import { BehaviorRule, Email, UserSettings } from '@/types';
+import { INITIAL_EMAILS } from './storage';
 import { DEFAULT_SETTINGS } from './classifier';
 
-// Check if Neon or standard PostgreSQL DATABASE_URL is configured
+// Check which cloud database is active
 export const isCloudDbConfigured = (): boolean => {
-  const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || '';
-  return Boolean(dbUrl && (dbUrl.startsWith('postgres://') || dbUrl.startsWith('postgresql://')));
+  return isMongoDbConfigured() || Boolean(process.env.DATABASE_URL || process.env.POSTGRES_URL);
 };
 
-// Lazy Neon client getter
-function getDb() {
+export const getActiveDbType = (): 'mongodb' | 'postgres' | 'memory' => {
+  if (isMongoDbConfigured()) return 'mongodb';
+  if (process.env.DATABASE_URL || process.env.POSTGRES_URL) return 'postgres';
+  return 'memory';
+};
+
+// PostgreSQL Neon lazy client
+function getPgDb() {
   const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || '';
   if (!connectionString) return null;
   return neon(connectionString);
 }
 
-// In-Memory Fallback State (when no external DB is plugged in)
+// In-Memory Fallback State
 let inMemoryEmails: Email[] = [...INITIAL_EMAILS];
 let inMemoryRules: BehaviorRule[] = [
   { target: 'google.com', scope: 'domain', rule: 'whitelist' },
@@ -30,14 +36,12 @@ let inMemoryScores: Record<string, number> = {
 };
 let inMemorySettings: UserSettings = { ...DEFAULT_SETTINGS };
 
-let tablesInitialized = false;
+let pgTablesInitialized = false;
 
-// Auto-provision tables if using PostgreSQL
-export async function ensureTablesExist(): Promise<void> {
-  if (tablesInitialized) return;
-  const sql = getDb();
+async function ensurePgTables(): Promise<void> {
+  if (pgTablesInitialized) return;
+  const sql = getPgDb();
   if (!sql) return;
-
   try {
     await sql`
       CREATE TABLE IF NOT EXISTS emails (
@@ -59,77 +63,77 @@ export async function ensureTablesExist(): Promise<void> {
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
     `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS behavior_rules (
-        id SERIAL PRIMARY KEY,
-        target TEXT NOT NULL,
-        scope TEXT NOT NULL,
-        rule TEXT NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE(target, scope)
-      );
-    `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS sender_scores (
-        sender TEXT PRIMARY KEY,
-        score INT DEFAULT 0,
-        opened_count INT DEFAULT 0,
-        ignored_count INT DEFAULT 0,
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS user_settings (
-        id TEXT PRIMARY KEY DEFAULT 'default',
-        active_hours_start INT DEFAULT 9,
-        active_hours_end INT DEFAULT 18,
-        quiet_hours_start INT DEFAULT 22,
-        quiet_hours_end INT DEFAULT 7,
-        email_source_mode TEXT DEFAULT 'dataset',
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `;
-
-    tablesInitialized = true;
-  } catch (err) {
-    console.error('Error auto-creating database tables:', err);
+    pgTablesInitialized = true;
+  } catch (e) {
+    console.error('PG table init error:', e);
   }
 }
 
+// ----------------------------------------------------
 // 1. EMAILS
+// ----------------------------------------------------
 export async function getEmails(): Promise<Email[]> {
-  const sql = getDb();
+  // Option A: MongoDB
+  if (isMongoDbConfigured()) {
+    try {
+      const db = await getMongoDb();
+      if (db) {
+        const collection = db.collection<Email>('emails');
+        const count = await collection.countDocuments();
+        if (count === 0) {
+          await collection.insertMany(INITIAL_EMAILS);
+          return INITIAL_EMAILS;
+        }
+        const items = await collection.find({}).sort({ date: -1 }).toArray();
+        return items.map(({ _id, ...rest }: any) => rest as Email);
+      }
+    } catch (err) {
+      console.warn('MongoDB fetch error, fallback:', err);
+    }
+  }
+
+  // Option B: PostgreSQL
+  const sql = getPgDb();
   if (sql) {
     try {
-      await ensureTablesExist();
+      await ensurePgTables();
       const rows = await sql`SELECT * FROM emails ORDER BY created_at DESC;`;
       if (rows && rows.length > 0) {
         return rows as unknown as Email[];
       }
-      // If table is empty, seed initial dataset
-      for (const e of INITIAL_EMAILS) {
-        await sql`
-          INSERT INTO emails (id, sender, sender_name, subject, message, category, date, hour, priority, notification_decision, confidence, reason_tags, sender_score)
-          VALUES (${e.id}, ${e.sender}, ${e.sender_name || ''}, ${e.subject}, ${e.message}, ${e.category}, ${e.date}, ${e.hour || 12}, ${e.priority}, ${e.notification_decision}, ${e.confidence}, ${e.reason_tags}, ${e.sender_score || 0})
-          ON CONFLICT (id) DO NOTHING;
-        `;
-      }
       return INITIAL_EMAILS;
     } catch (err) {
-      console.warn('DB query error, fallback to memory:', err);
+      console.warn('Postgres fetch error, fallback:', err);
     }
   }
+
+  // Option C: Memory
   return inMemoryEmails;
 }
 
 export async function addOrUpdateEmail(email: Email): Promise<void> {
-  const sql = getDb();
+  // Option A: MongoDB
+  if (isMongoDbConfigured()) {
+    try {
+      const db = await getMongoDb();
+      if (db) {
+        await db.collection('emails').updateOne(
+          { id: email.id },
+          { $set: email },
+          { upsert: true }
+        );
+        return;
+      }
+    } catch (err) {
+      console.warn('MongoDB update error:', err);
+    }
+  }
+
+  // Option B: PostgreSQL
+  const sql = getPgDb();
   if (sql) {
     try {
-      await ensureTablesExist();
+      await ensurePgTables();
       await sql`
         INSERT INTO emails (id, sender, sender_name, subject, message, category, date, hour, priority, notification_decision, confidence, reason_tags, sender_score, is_reviewed)
         VALUES (${email.id}, ${email.sender}, ${email.sender_name || ''}, ${email.subject}, ${email.message}, ${email.category}, ${email.date}, ${email.hour || 12}, ${email.priority}, ${email.notification_decision}, ${email.confidence}, ${email.reason_tags}, ${email.sender_score || 0}, ${email.is_reviewed || false})
@@ -142,10 +146,11 @@ export async function addOrUpdateEmail(email: Email): Promise<void> {
       `;
       return;
     } catch (err) {
-      console.warn('DB upsert error, saving to memory:', err);
+      console.warn('Postgres update error:', err);
     }
   }
 
+  // Option C: Memory
   const index = inMemoryEmails.findIndex((e) => e.id === email.id);
   if (index >= 0) {
     inMemoryEmails[index] = email;
@@ -154,37 +159,65 @@ export async function addOrUpdateEmail(email: Email): Promise<void> {
   }
 }
 
+// ----------------------------------------------------
 // 2. BEHAVIOR RULES
+// ----------------------------------------------------
 export async function getRules(): Promise<BehaviorRule[]> {
-  const sql = getDb();
-  if (sql) {
+  // Option A: MongoDB
+  if (isMongoDbConfigured()) {
     try {
-      await ensureTablesExist();
-      const rows = await sql`SELECT target, scope, rule FROM behavior_rules;`;
-      return rows as unknown as BehaviorRule[];
+      const db = await getMongoDb();
+      if (db) {
+        const collection = db.collection<BehaviorRule>('behavior_rules');
+        const count = await collection.countDocuments();
+        if (count === 0) {
+          const defaultRules = [
+            { target: 'google.com', scope: 'domain' as const, rule: 'whitelist' as const },
+            { target: 'quora.com', scope: 'domain' as const, rule: 'blacklist' as const },
+          ];
+          await collection.insertMany(defaultRules);
+          return defaultRules;
+        }
+        const items = await collection.find({}).toArray();
+        return items.map(({ _id, ...rest }: any) => rest as BehaviorRule);
+      }
     } catch (err) {
-      console.warn('DB rules error:', err);
+      console.warn('MongoDB rules error:', err);
     }
   }
+
+  // Option B: PostgreSQL
+  const sql = getPgDb();
+  if (sql) {
+    try {
+      const rows = await sql`SELECT target, scope, rule FROM behavior_rules;`;
+      return rows as unknown as BehaviorRule[];
+    } catch (err) {}
+  }
+
+  // Option C: Memory
   return inMemoryRules;
 }
 
 export async function addRule(rule: BehaviorRule): Promise<BehaviorRule[]> {
-  const sql = getDb();
-  if (sql) {
+  // Option A: MongoDB
+  if (isMongoDbConfigured()) {
     try {
-      await ensureTablesExist();
-      await sql`
-        INSERT INTO behavior_rules (target, scope, rule)
-        VALUES (${rule.target}, ${rule.scope}, ${rule.rule})
-        ON CONFLICT (target, scope) DO UPDATE SET rule = EXCLUDED.rule;
-      `;
-      return await getRules();
+      const db = await getMongoDb();
+      if (db) {
+        await db.collection('behavior_rules').updateOne(
+          { target: rule.target, scope: rule.scope },
+          { $set: rule },
+          { upsert: true }
+        );
+        return await getRules();
+      }
     } catch (err) {
-      console.warn('DB rule save error:', err);
+      console.warn('MongoDB add rule error:', err);
     }
   }
 
+  // Option B: Memory
   inMemoryRules = inMemoryRules.filter(
     (r) => !(r.target.toLowerCase() === rule.target.toLowerCase() && r.scope === rule.scope)
   );
@@ -193,39 +226,43 @@ export async function addRule(rule: BehaviorRule): Promise<BehaviorRule[]> {
 }
 
 export async function deleteRule(target: string, scope: string): Promise<BehaviorRule[]> {
-  const sql = getDb();
-  if (sql) {
+  // Option A: MongoDB
+  if (isMongoDbConfigured()) {
     try {
-      await ensureTablesExist();
-      await sql`DELETE FROM behavior_rules WHERE target = ${target} AND scope = ${scope};`;
-      return await getRules();
-    } catch (err) {
-      console.warn('DB rule delete error:', err);
-    }
+      const db = await getMongoDb();
+      if (db) {
+        await db.collection('behavior_rules').deleteOne({ target, scope });
+        return await getRules();
+      }
+    } catch (err) {}
   }
 
+  // Option B: Memory
   inMemoryRules = inMemoryRules.filter(
     (r) => !(r.target.toLowerCase() === target.toLowerCase() && r.scope === scope)
   );
   return inMemoryRules;
 }
 
-// 3. SENDER BEHAVIOR FEEDBACK
+// ----------------------------------------------------
+// 3. SENDER BEHAVIOR SCORES
+// ----------------------------------------------------
 export async function getSenderScores(): Promise<Record<string, number>> {
-  const sql = getDb();
-  if (sql) {
+  // Option A: MongoDB
+  if (isMongoDbConfigured()) {
     try {
-      await ensureTablesExist();
-      const rows = await sql`SELECT sender, score FROM sender_scores;`;
-      const result: Record<string, number> = {};
-      rows.forEach((r: any) => {
-        result[r.sender.toLowerCase()] = r.score;
-      });
-      return result;
-    } catch (err) {
-      console.warn('DB sender scores error:', err);
-    }
+      const db = await getMongoDb();
+      if (db) {
+        const rows = await db.collection('sender_scores').find({}).toArray();
+        const result: Record<string, number> = {};
+        rows.forEach((r: any) => {
+          result[r.sender.toLowerCase()] = r.score;
+        });
+        if (Object.keys(result).length > 0) return result;
+      }
+    } catch (err) {}
   }
+
   return inMemoryScores;
 }
 
@@ -236,28 +273,26 @@ export async function updateSenderFeedback(sender: string, action: 'opened' | 'i
   const delta = action === 'opened' ? 2 : -1;
   const newScore = current + delta;
 
-  const sql = getDb();
-  if (sql) {
+  // Option A: MongoDB
+  if (isMongoDbConfigured()) {
     try {
-      await ensureTablesExist();
-      await sql`
-        INSERT INTO sender_scores (sender, score, opened_count, ignored_count, updated_at)
-        VALUES (
-          ${normSender},
-          ${newScore},
-          ${action === 'opened' ? 1 : 0},
-          ${action === 'ignored' ? 1 : 0},
-          NOW()
-        )
-        ON CONFLICT (sender) DO UPDATE SET
-          score = ${newScore},
-          opened_count = sender_scores.opened_count + ${action === 'opened' ? 1 : 0},
-          ignored_count = sender_scores.ignored_count + ${action === 'ignored' ? 1 : 0},
-          updated_at = NOW();
-      `;
-      return newScore;
+      const db = await getMongoDb();
+      if (db) {
+        await db.collection('sender_scores').updateOne(
+          { sender: normSender },
+          {
+            $set: { score: newScore, updated_at: new Date() },
+            $inc: {
+              opened_count: action === 'opened' ? 1 : 0,
+              ignored_count: action === 'ignored' ? 1 : 0,
+            },
+          },
+          { upsert: true }
+        );
+        return newScore;
+      }
     } catch (err) {
-      console.warn('DB feedback update error:', err);
+      console.warn('MongoDB feedback error:', err);
     }
   }
 
@@ -265,44 +300,43 @@ export async function updateSenderFeedback(sender: string, action: 'opened' | 'i
   return newScore;
 }
 
+// ----------------------------------------------------
 // 4. USER SETTINGS
+// ----------------------------------------------------
 export async function getUserSettings(): Promise<UserSettings> {
-  const sql = getDb();
-  if (sql) {
+  // Option A: MongoDB
+  if (isMongoDbConfigured()) {
     try {
-      await ensureTablesExist();
-      const rows = await sql`SELECT active_hours_start, active_hours_end, quiet_hours_start, quiet_hours_end, email_source_mode FROM user_settings WHERE id = 'default';`;
-      if (rows && rows.length > 0) {
-        return rows[0] as unknown as UserSettings;
+      const db = await getMongoDb();
+      if (db) {
+        const doc = await db.collection('user_settings').findOne({ id: 'default' });
+        if (doc) {
+          const { _id, ...settings } = doc as any;
+          return settings as UserSettings;
+        }
       }
-    } catch (err) {
-      console.warn('DB settings error:', err);
-    }
+    } catch (err) {}
   }
+
   return inMemorySettings;
 }
 
 export async function saveUserSettings(settings: UserSettings): Promise<UserSettings> {
-  const sql = getDb();
-  if (sql) {
+  // Option A: MongoDB
+  if (isMongoDbConfigured()) {
     try {
-      await ensureTablesExist();
-      await sql`
-        INSERT INTO user_settings (id, active_hours_start, active_hours_end, quiet_hours_start, quiet_hours_end, email_source_mode, updated_at)
-        VALUES ('default', ${settings.active_hours_start}, ${settings.active_hours_end}, ${settings.quiet_hours_start}, ${settings.quiet_hours_end}, ${settings.email_source_mode}, NOW())
-        ON CONFLICT (id) DO UPDATE SET
-          active_hours_start = EXCLUDED.active_hours_start,
-          active_hours_end = EXCLUDED.active_hours_end,
-          quiet_hours_start = EXCLUDED.quiet_hours_start,
-          quiet_hours_end = EXCLUDED.quiet_hours_end,
-          email_source_mode = EXCLUDED.email_source_mode,
-          updated_at = NOW();
-      `;
-      return settings;
-    } catch (err) {
-      console.warn('DB settings save error:', err);
-    }
+      const db = await getMongoDb();
+      if (db) {
+        await db.collection('user_settings').updateOne(
+          { id: 'default' },
+          { $set: { id: 'default', ...settings, updated_at: new Date() } },
+          { upsert: true }
+        );
+        return settings;
+      }
+    } catch (err) {}
   }
+
   inMemorySettings = { ...settings };
   return inMemorySettings;
 }
