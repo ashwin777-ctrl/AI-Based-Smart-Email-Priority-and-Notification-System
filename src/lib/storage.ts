@@ -1,5 +1,4 @@
 import { BehaviorRule, Email, ModelMetrics, SenderScore, UserSettings } from '../types';
-import { getSupabaseClient, isSupabaseConfigured } from './supabase';
 import { classifyEmail, DEFAULT_SETTINGS } from './classifier';
 
 export const INITIAL_EMAILS: Email[] = [
@@ -133,29 +132,28 @@ export const INITIAL_METRICS: ModelMetrics = {
   updated_at: new Date().toISOString(),
 };
 
-// STORAGE HELPERS WITH SUPABASE + LOCALSTORAGE FALLBACK
 const STORAGE_KEYS = {
   EMAILS: 'smart_email_items',
   RULES: 'smart_email_rules',
   SCORES: 'smart_email_sender_scores',
   SETTINGS: 'smart_email_settings',
-  METRICS: 'smart_email_metrics',
 };
 
+// HYBRID DATA LAYER: API ROUTES WITH LOCAL FALLBACK
 export async function fetchEmailsFromStorage(): Promise<Email[]> {
-  const client = getSupabaseClient();
-  if (client) {
-    try {
-      const { data, error } = await client
-        .from('emails')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (!error && data && data.length > 0) {
-        return data as Email[];
+  try {
+    const res = await fetch('/api/emails');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.emails && data.emails.length > 0) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(STORAGE_KEYS.EMAILS, JSON.stringify(data.emails));
+        }
+        return data.emails;
       }
-    } catch (e) {
-      console.warn('Supabase fetch failed, using fallback storage:', e);
     }
+  } catch (e) {
+    // API not reachable, fallback to localStorage
   }
 
   if (typeof window !== 'undefined') {
@@ -163,9 +161,7 @@ export async function fetchEmailsFromStorage(): Promise<Email[]> {
     if (cached) {
       try {
         return JSON.parse(cached);
-      } catch (e) {
-        // ignore parse error
-      }
+      } catch (e) {}
     }
   }
 
@@ -177,28 +173,30 @@ export async function saveEmailsToStorage(emails: Email[]): Promise<void> {
     localStorage.setItem(STORAGE_KEYS.EMAILS, JSON.stringify(emails));
   }
 
-  const client = getSupabaseClient();
-  if (client) {
-    try {
-      await client.from('emails').upsert(emails);
-    } catch (e) {
-      console.warn('Supabase upsert failed:', e);
+  try {
+    if (emails.length > 0) {
+      await fetch('/api/emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(emails[0]),
+      });
     }
-  }
+  } catch (e) {}
 }
 
 export async function fetchRulesFromStorage(): Promise<BehaviorRule[]> {
-  const client = getSupabaseClient();
-  if (client) {
-    try {
-      const { data, error } = await client.from('behavior_rules').select('*');
-      if (!error && data) {
-        return data as BehaviorRule[];
+  try {
+    const res = await fetch('/api/rules');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.rules) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(STORAGE_KEYS.RULES, JSON.stringify(data.rules));
+        }
+        return data.rules;
       }
-    } catch (e) {
-      console.warn('Supabase fetch rules error:', e);
     }
-  }
+  } catch (e) {}
 
   if (typeof window !== 'undefined') {
     const cached = localStorage.getItem(STORAGE_KEYS.RULES);
@@ -216,70 +214,63 @@ export async function fetchRulesFromStorage(): Promise<BehaviorRule[]> {
 }
 
 export async function saveRuleToStorage(rule: BehaviorRule): Promise<BehaviorRule[]> {
+  try {
+    const res = await fetch('/api/rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(rule),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.rules) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(STORAGE_KEYS.RULES, JSON.stringify(data.rules));
+        }
+        return data.rules;
+      }
+    }
+  } catch (e) {}
+
   const rules = await fetchRulesFromStorage();
   const filtered = rules.filter(
     (r) => !(r.target.toLowerCase() === rule.target.toLowerCase() && r.scope === rule.scope)
   );
   filtered.push(rule);
-
   if (typeof window !== 'undefined') {
     localStorage.setItem(STORAGE_KEYS.RULES, JSON.stringify(filtered));
   }
-
-  const client = getSupabaseClient();
-  if (client) {
-    try {
-      await client.from('behavior_rules').upsert([rule], { onConflict: 'target,scope' });
-    } catch (e) {
-      console.warn('Supabase rule save error:', e);
-    }
-  }
-
   return filtered;
 }
 
 export async function deleteRuleFromStorage(target: string, scope: 'sender' | 'domain'): Promise<BehaviorRule[]> {
+  try {
+    const res = await fetch('/api/rules', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target, scope }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.rules) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(STORAGE_KEYS.RULES, JSON.stringify(data.rules));
+        }
+        return data.rules;
+      }
+    }
+  } catch (e) {}
+
   const rules = await fetchRulesFromStorage();
-  const updated = rules.filter(
+  const filtered = rules.filter(
     (r) => !(r.target.toLowerCase() === target.toLowerCase() && r.scope === scope)
   );
-
   if (typeof window !== 'undefined') {
-    localStorage.setItem(STORAGE_KEYS.RULES, JSON.stringify(updated));
+    localStorage.setItem(STORAGE_KEYS.RULES, JSON.stringify(filtered));
   }
-
-  const client = getSupabaseClient();
-  if (client) {
-    try {
-      await client
-        .from('behavior_rules')
-        .delete()
-        .match({ target, scope });
-    } catch (e) {
-      console.warn('Supabase rule delete error:', e);
-    }
-  }
-
-  return updated;
+  return filtered;
 }
 
 export async function fetchSenderScores(): Promise<Record<string, number>> {
-  const client = getSupabaseClient();
-  if (client) {
-    try {
-      const { data, error } = await client.from('sender_scores').select('*');
-      if (!error && data) {
-        const scores: Record<string, number> = {};
-        data.forEach((row: any) => {
-          scores[row.sender.toLowerCase()] = row.score;
-        });
-        return scores;
-      }
-    } catch (e) {
-      console.warn('Supabase fetch sender scores error:', e);
-    }
-  }
-
   if (typeof window !== 'undefined') {
     const cached = localStorage.getItem(STORAGE_KEYS.SCORES);
     if (cached) {
@@ -301,36 +292,42 @@ export async function recordFeedbackInStorage(
   sender: string,
   action: 'opened' | 'ignored'
 ): Promise<number> {
-  const senderNorm = sender.toLowerCase().trim();
+  const normSender = sender.toLowerCase().trim();
   const scores = await fetchSenderScores();
-  const current = scores[senderNorm] || 0;
+  const current = scores[normSender] || 0;
   const delta = action === 'opened' ? 2 : -1;
   const newScore = current + delta;
-  scores[senderNorm] = newScore;
+  scores[normSender] = newScore;
 
   if (typeof window !== 'undefined') {
     localStorage.setItem(STORAGE_KEYS.SCORES, JSON.stringify(scores));
   }
 
-  const client = getSupabaseClient();
-  if (client) {
-    try {
-      await client.from('sender_scores').upsert({
-        sender: senderNorm,
-        score: newScore,
-        opened_count: action === 'opened' ? 1 : 0,
-        ignored_count: action === 'ignored' ? 1 : 0,
-        updated_at: new Date().toISOString(),
-      });
-    } catch (e) {
-      console.warn('Supabase sender score save error:', e);
-    }
-  }
+  try {
+    await fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sender: normSender, action }),
+    });
+  } catch (e) {}
 
   return newScore;
 }
 
 export async function fetchSettings(): Promise<UserSettings> {
+  try {
+    const res = await fetch('/api/settings');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.settings) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(data.settings));
+        }
+        return data.settings;
+      }
+    }
+  } catch (e) {}
+
   if (typeof window !== 'undefined') {
     const cached = localStorage.getItem(STORAGE_KEYS.SETTINGS);
     if (cached) {
@@ -346,20 +343,12 @@ export async function saveSettings(settings: UserSettings): Promise<void> {
   if (typeof window !== 'undefined') {
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
   }
-  const client = getSupabaseClient();
-  if (client) {
-    try {
-      await client.from('user_settings').upsert({
-        id: 'default',
-        active_hours_start: settings.active_hours_start,
-        active_hours_end: settings.active_hours_end,
-        quiet_hours_start: settings.quiet_hours_start,
-        quiet_hours_end: settings.quiet_hours_end,
-        email_source_mode: settings.email_source_mode,
-        updated_at: new Date().toISOString(),
-      });
-    } catch (e) {
-      console.warn('Supabase settings save error:', e);
-    }
-  }
+
+  try {
+    await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    });
+  } catch (e) {}
 }

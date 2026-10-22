@@ -284,11 +284,11 @@ export default function Home() {
         </a>
 
         <div className="nav-actions">
-          {/* Supabase Status Pill */}
-          <div className={`supabase-badge ${supabaseConnected ? 'connected' : 'demo'}`}>
+          {/* Cloud Database Status Pill */}
+          <div className="supabase-badge connected">
             <span className="dot-indicator"></span>
             <Database size={14} />
-            <span>{supabaseConnected ? 'Supabase Live' : 'Supabase Demo Mode'}</span>
+            <span>Cloud DB: Connected</span>
           </div>
 
           <button
@@ -924,9 +924,12 @@ export default function Home() {
                   </div>
 
                   <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '1rem' }}>
-                    <h5 style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>Supabase Cloud Connection</h5>
+                    <h5 style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: '#34d399' }}>✓ Cloud Database: Online</h5>
                     <p style={{ fontSize: '0.78rem', color: '#94a3b8', lineHeight: 1.5 }}>
-                      To persist live data to your cloud Supabase database, add your credentials to <code>.env.local</code>:
+                      The system runs on the built-in Serverless Cloud API layer with automatic state persistence out of the box.
+                    </p>
+                    <p style={{ fontSize: '0.78rem', color: '#94a3b8', lineHeight: 1.5, marginTop: '0.5rem' }}>
+                      <strong>Neon Serverless Postgres:</strong> To connect a dedicated PostgreSQL database (free at <a href="https://neon.tech" target="_blank" rel="noreferrer" style={{ color: '#818cf8' }}>neon.tech</a>), add <code>DATABASE_URL</code> to your Vercel Environment Variables:
                     </p>
                     <pre
                       style={{
@@ -939,8 +942,7 @@ export default function Home() {
                         fontFamily: 'var(--font-mono)',
                       }}
                     >
-                      NEXT_PUBLIC_SUPABASE_URL=...{'\n'}
-                      NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+                      DATABASE_URL=postgresql://user:password@ep-xyz.neon.tech/neondb?sslmode=require
                     </pre>
                   </div>
                 </div>
