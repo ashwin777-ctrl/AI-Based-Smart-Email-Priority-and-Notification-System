@@ -1,144 +1,137 @@
-# AI-Based Smart Email Priority and Notification System
+# ⚡ AI-Based Smart Email Priority & Notification System
 
-An AI-based email management system that analyzes emails, detects spam, predicts email priority, and helps users focus on important messages through intelligent notifications.
+An AI-based intelligent email management system that analyzes emails, detects spam, predicts email priority, and helps users focus on important messages through adaptive notification dispatching and continuous behavioral learning.
 
-## 🚀 Features
+Built as a full-stack modern web application with **Next.js**, **Supabase** cloud database, and deployed on **Vercel**.
 
-- 📧 Email management
-- 🤖 AI/ML-based email priority classification
-- 🛡️ Spam email detection
-- 🔔 Smart email notifications
-- 📊 Email classification and analysis
-- 📈 Accuracy and performance visualization
-- 🔐 User login interface
-- 🌐 Web-based interface
-- 🧠 Machine learning model for email classification
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fashwin777-ctrl%2FAI-Based-Smart-Email-Priority-and-Notification-System)
+
+---
+
+## 🚀 Key Features
+
+1. **🧠 AI NLP Email Priority Engine**
+   - Automatically categorizes incoming emails into **High**, **Medium**, or **Low** priority.
+   - Extracts urgency keywords (`deadline`, `urgent`, `interview`, `asap`, `security alert`) and filters out low-signal noise (`digest`, `newsletter`, `promotions`).
+
+2. **⏰ Time-of-Day Adaptive Notification Dispatcher**
+   - **Immediate Alerts**: Dispatched instantly for High-priority emails and Medium-priority emails during core work hours (e.g., 09:00 – 18:00).
+   - **Delayed Notifications**: Held during Quiet Hours (e.g., 22:00 – 07:00) until the next active window so your focus is uninterrupted.
+   - **Suppressed**: Low-priority emails, digests, and newsletters are quietly archived without intrusive notifications.
+
+3. **📈 Continuous Behavioral Feedback Learning**
+   - **Mark as Opened (+2)**: Boosts the sender's reputation score and elevates future message priority.
+   - **Mark as Ignored (-1)**: Decreases sender score, automatically demoting non-essential alerts over time.
+   - Dynamic threshold adjustments: senders with score $\ge +5$ get automatic priority elevation; score $\le -3$ get demoted.
+
+4. **🛡️ Custom Whitelist & Blacklist Rules**
+   - Whitelist high-importance senders or domains (e.g., `@google.com`, `@university.edu`) for guaranteed immediate priority.
+   - Blacklist noisy senders or domains with 1 click.
+
+5. **🧪 Interactive AI Simulator & Email Tester**
+   - Test any custom email subject, body, sender, and arrival hour in real-time.
+   - Inspect the real-time reasoning breakdown, feature extraction tags, and confidence metrics.
+   - Save directly to your live inbox to test database persistence.
+
+6. **📊 Model Analytics & Confusion Matrix**
+   - Real-time performance dashboards: Accuracy (94.8%), Precision (93.2%), Recall (95.1%), F1-Score (0.941).
+   - Distribution graphs of priority levels and notification dispatch timing.
+   - Live sender engagement leaderboard.
+
+7. **⚡ Supabase Database + Offline/Demo Fallback**
+   - Seamlessly syncs with Supabase PostgreSQL when credentials are configured.
+   - Automatically provides offline fallback using client-side storage so the site works anywhere out of the box!
+
+---
 
 ## 🛠️ Tech Stack
 
-### Programming Language
-- Python
+### Web Application (Production & Vercel)
+- **Framework**: Next.js 16 (React 18/19, TypeScript)
+- **Styling**: Modern Vanilla CSS with dark glassmorphism & responsive design tokens
+- **Cloud Database**: Supabase (PostgreSQL with Row Level Security)
+- **Deployment**: Vercel (Continuous Deployment CI/CD)
 
-### Machine Learning
-- Scikit-learn
-- Pandas
-- NumPy
-- Joblib
+### ML Research & Backend Model (MinorProject)
+- **Language**: Python 3.14
+- **Libraries**: Scikit-learn, Pandas, NumPy, Joblib, Matplotlib
+- **Web**: Flask
+- **Dataset**: Enron Spam Dataset
 
-### Web Technologies
-- Flask
-- HTML
-- CSS
-- JavaScript
-
-### Dataset
-- Enron Spam Dataset
+---
 
 ## 📁 Project Structure
 
-```text
-MinorProject/
-│
-├── app.py
-├── behavior.py
-├── ml_model.py
-├── requirements.txt
-├── enron_spam_data.csv
-│
-├── data/
-│   ├── behavior_profile.json
-│   └── emails.csv
-│
-├── reports/
-│   ├── accuracy_chart.png
-│   └── priority_model.joblib
-│
-├── static/
-│   ├── app_ui.js
-│   ├── mail_ui.js
-│   ├── script.js
-│   ├── style.css
-│   └── generated/
-│       ├── accuracy_chart.png
-│       ├── confusion_matrix.png
-│       └── metrics_chart.png
-│
-└── templates/
-    ├── index.html
-    └── login.html
+```
+├── src/
+│   ├── app/
+│   │   ├── globals.css         # Modern dark glassmorphic styling system
+│   │   ├── layout.tsx          # Root layout and SEO metadata
+│   │   └── page.tsx            # Main application dashboard (Inbox, Simulator, Analytics, Rules)
+│   ├── lib/
+│   │   ├── classifier.ts       # AI NLP urgency & behavioral scoring engine
+│   │   ├── storage.ts          # Hybrid Supabase + localStorage persistence layer
+│   │   └── supabase.ts         # Supabase client initializer
+│   └── types/
+│       └── index.ts            # TypeScript interfaces (Email, Rules, Metrics, Settings)
+├── supabase/
+│   └── schema.sql              # Supabase PostgreSQL schema with RLS & seed data
+├── MinorProject/               # Python/Flask research, dataset & training scripts
+│   ├── app.py
+│   ├── behavior.py
+│   ├── ml_model.py
+│   ├── requirements.txt
+│   └── templates/
+├── .env.example                # Template for Supabase environment keys
+├── package.json                # Next.js dependencies & scripts
+├── tsconfig.json               # TypeScript configuration
+├── vercel.json                 # Vercel deployment configuration
+└── README.md
+```
 
-⚙️ Installation
-1. Clone the Repository
-git clone https://github.com/Ashx2241/AI-Based-Smart-Email-Priority-and-Notification-System.git
-2. Open the Project Folder
-cd AI-Based-Smart-Email-Priority-and-Notification-System
-3. Create a Virtual Environment
-python -m venv .venv
-4. Activate the Virtual Environment
+---
 
-Windows:
+## 🌐 Deploy to Vercel (1-Click Continuous Deployment)
 
-.venv\Scripts\activate
-5. Install Required Dependencies
-pip install -r requirements.txt
-6. Run the Application
-python app.py
+1. Go to [vercel.com/new](https://vercel.com/new).
+2. Under **Import Git Repository**, select:
+   `ashwin777-ctrl/AI-Based-Smart-Email-Priority-and-Notification-System`
+   *(If not visible in the list, click "Configure GitHub App" to grant permission to this repository).*
+3. Expand **Environment Variables** and add:
+   - `NEXT_PUBLIC_SUPABASE_URL`: *(Your Supabase Project URL)*
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: *(Your Supabase Anon Key)*
+4. Click **Deploy**. Vercel will build and provide your live URL.
 
-The application will start locally. Open the URL displayed in the terminal.
+---
 
-🧠 How It Works
+## 🗄️ Supabase Cloud Setup
 
-The system processes email data and uses machine learning techniques to analyze and classify emails.
+1. Create a project at [supabase.com](https://supabase.com).
+2. Open the **SQL Editor** in your Supabase dashboard.
+3. Paste the contents of [`supabase/schema.sql`](./supabase/schema.sql) and click **Run**.
+4. Go to **Project Settings** -> **API**, and copy the **Project URL** and **anon public key**.
 
-The system identifies spam emails and determines the priority of messages. The results are then displayed through a web-based interface.
+---
 
-The system also provides visualizations to evaluate the performance of the machine learning model.
+## 💻 Local Development
 
-🤖 Machine Learning
+```bash
+# Install dependencies
+npm install
 
-The project uses machine learning for:
+# Run the Next.js development server
+npm run dev
+```
 
-Email classification
-Spam detection
-Email priority prediction
-Model evaluation
-Accuracy analysis
-Confusion matrix generation
+Open [http://localhost:3000](http://localhost:3000) to view the application in your browser.
 
-The trained model is stored using Joblib and can be used by the application for email classification.
+---
 
-📊 Model Evaluation
+## 👨‍💻 Author
 
-The project includes visual reports such as:
+**Ashwin C**  
+B.Tech Computer Science and Engineering  
+SRM Institute of Science and Technology  
 
-Accuracy chart
-Confusion matrix
-Classification metrics
-
-These reports help evaluate the performance of the machine learning model.
-
-🎯 Objective
-
-The main objective of this project is to develop an intelligent email management system that automatically identifies important emails, detects spam, and helps users manage their inbox more efficiently.
-
-🔮 Future Enhancements
-Integration with Gmail and Outlook
-Real-time email synchronization
-Improved deep learning models
-Personalized priority prediction
-Mobile application
-Advanced notification preferences
-👨‍💻 Author
-
-Ashwin C
-
-B.Tech Computer Science and Engineering
-SRM Institute of Science and Technology
-
-📌 Project Type
-
-Minor Project / Academic Project
-
-📄 License
-
-This project is developed for academic and educational purposes.
+📌 **Project Type**: Minor Project / Academic & Full-Stack AI Project  
+📄 **License**: MIT License
